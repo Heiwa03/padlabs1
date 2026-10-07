@@ -1,0 +1,40 @@
+# Demo local rapid:  docker compose up --build
+# Scalare receiveri: docker compose up --scale receiver=3
+services:
+  broker:
+    build: ./broker
+    image: padlabs/broker:latest
+    environment:
+      BROKER__STORAGE: file
+    ports:
+      - "5000:5000"
+      - "8080:8080"
+    volumes:
+      - broker-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5000' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  receiver:
+    build: ./clients
+    image: padlabs/clients:latest
+    command: ["receiver.py", "--topic", "orders", "--group", "workers"]
+    environment:
+      BROKER_HOST: broker
+    depends_on:
+      - broker
+    restart: unless-stopped
+
+  sender:
+    image: padlabs/clients:latest
+    command: ["sender.py", "--topic", "orders", "--type", "OrderCreated", "--forever", "--rate", "2"]
+    environment:
+      BROKER_HOST: broker
+    depends_on:
+      - broker
+    restart: unless-stopped
+
+volumes:
+  broker-data:

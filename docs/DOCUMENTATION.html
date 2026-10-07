@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent de mesagerie (Message Broker) — Documentație completă</title>
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0b6bcb;--code:#f3f5f7;--card:#f8f9fb;--quote:#e8f1fb}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2b333d;--accent:#6cb2ff;--code:#1a2029;--card:#151b23;--quote:#14283d}}
+:root[data-theme=light]{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0b6bcb;--code:#f3f5f7;--card:#f8f9fb;--quote:#e8f1fb}
+:root[data-theme=dark]{--bg:#0f1318;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2b333d;--accent:#6cb2ff;--code:#1a2029;--card:#151b23;--quote:#14283d}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.layout{display:flex;max-width:1280px;margin:0 auto}
+nav{position:sticky;top:0;align-self:flex-start;height:100vh;overflow:auto;width:290px;flex:none;padding:24px 16px;border-right:1px solid var(--line);font-size:14px}
+nav h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+nav a{display:block;color:var(--fg);text-decoration:none;padding:5px 8px;border-radius:6px;line-height:1.35}
+nav a:hover{background:var(--card)}nav a.active{color:var(--accent);background:var(--card);font-weight:600}
+main{flex:1;min-width:0;padding:32px 40px 80px;max-width:920px}
+h1{font-size:2rem;line-height:1.25;margin:.2em 0 .4em}
+h2{font-size:1.5rem;margin:2.2em 0 .6em;padding-top:.8em;border-top:1px solid var(--line)}
+h3{font-size:1.15rem;margin:1.6em 0 .4em}
+a{color:var(--accent)}
+p,li{max-width:75ch}
+blockquote{margin:1em 0;padding:.6em 1em;background:var(--quote);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;color:var(--fg)}
+blockquote p{margin:.3em 0}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,SFMono-Regular,Consolas,monospace}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow:auto;border:1px solid var(--line);line-height:1.5}
+pre code{background:none;padding:0;font-size:.85em}
+.tablewrap{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}
+tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 55%,transparent)}
+hr{border:none;border-top:1px solid var(--line);margin:2em 0}
+pre.mermaid{background:var(--card);text-align:center;padding:18px 10px}
+pre.mermaid[data-processed]{white-space:normal}
+.theme{position:fixed;right:14px;top:12px;z-index:5;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+.menu{display:none}
+@media (max-width:900px){
+  nav{display:none;position:fixed;inset:0 auto 0 0;z-index:4;background:var(--bg);width:min(85vw,320px)}
+  body.navopen nav{display:block}
+  .menu{display:block;position:fixed;left:14px;top:12px;z-index:5;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px}
+  main{padding:56px 16px 60px}
+}
+@media print{nav,.theme,.menu{display:none}.layout{display:block}main{max-width:none;padding:0}h2{break-after:avoid}pre,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<button class="menu" aria-label="Cuprins">☰ Cuprins</button>
+<button class="theme" id="theme" aria-label="Schimbă tema">◐ Temă</button>
+<div class="layout">
+<nav><h2>Cuprins</h2><a href="#1-scopul-si-obiectivele-lucrarii">1. Scopul și obiectivele lucrării</a><a href="#2-ce-este-un-message-broker">2. Ce este un message broker</a><a href="#3-arhitectura-sistemului">3. Arhitectura sistemului</a><a href="#4-alegeri-tehnologice-si-argumentare">4. Alegeri tehnologice și argumentare</a><a href="#5-protocolul-de-lucru">5. Protocolul de lucru</a><a href="#6-canale-si-rutare-publishersubscriber">6. Canale și rutare Publisher/Subscriber</a><a href="#7-tratarea-concurenta">7. Tratarea concurentă</a><a href="#8-stocarea-mesajelor-transient-si-persistent">8. Stocarea mesajelor: transient și persistent</a><a href="#9-politici-de-livrare-si-tratarea-erorilor">9. Politici de livrare și tratarea erorilor</a><a href="#10-docker">10. Docker</a><a href="#11-kubernetes-si-clustering">11. Kubernetes și clustering</a><a href="#12-ghid-de-rulare">12. Ghid de rulare</a><a href="#13-testare-si-rezultate">13. Testare și rezultate</a><a href="#14-limitari-si-legatura-cu-partea-2-rpc">14. Limitări și legătura cu Partea 2 (RPC)</a><a href="#15-concluzii-si-referinte">15. Concluzii și referințe</a></nav>
+<main>
+<h1 id="agent-de-mesagerie-message-broker-documentatie-completa">Agent de mesagerie (Message Broker) — Documentație completă</h1>
+<p><strong>Proiectul Nr.1, Partea 1 — implementare cu Socket-uri (TCP)</strong>
+Broker: C# (.NET 8) · Sender/Receiver: Python 3 · Docker · Kubernetes (kind) · clustering primary/standby</p>
+<blockquote>
+<p>Document structurat pentru a fi transformat ulterior în prezentare PowerPoint: fiecare secțiune <code>##</code> ≈ 1–3 slide-uri,
+fiecare începe cu un rezumat <strong>„Pe scurt”</strong>, diagramele sunt Mermaid (pot fi randate la imagine și lipite în slide-uri),
+iar exemplele (JSON, loguri, rezultate) provin din rulări reale ale sistemului.</p>
+</blockquote>
+<hr />
+<h2 id="1-scopul-si-obiectivele-lucrarii">1. Scopul și obiectivele lucrării</h2>
+<p><strong>Pe scurt:</strong> integrare asincronă între componente distribuite prin intermediul unui agent de mesaje, implementată la nivel de socket-uri.</p>
+<ul>
+<li>Scop: integrarea bazată pe agenți de mesaje, care permite comunicare <strong>asincronă</strong> între componentele unui sistem distribuit.</li>
+<li>Obiectiv (Partea 1): sistem complet realizat cu <strong>Socket-uri</strong>; (Partea 2, ulterior: același sistem cu <strong>RPC</strong> — gRPC/Thrift).</li>
+<li>Cerințe acoperite:
+  1. protocol de lucru definit (format, canale, structura comunicației, politici de livrare);
+  2. nivel abstract de comunicare (rețea), transport argumentat, <strong>tratare concurentă</strong>;
+  3. păstrarea mesajelor: <strong>transient</strong> (colecții concurente) și <strong>persistent</strong> (serializare asincronă), rutare <strong>Publisher/Subscriber</strong> pe topic;
+  4. în plus față de nota minimă: Docker, Kubernetes și clustering pentru eliminarea punctului unic de eșec.</li>
+</ul>
+<hr />
+<h2 id="2-ce-este-un-message-broker">2. Ce este un message broker</h2>
+<p><strong>Pe scurt:</strong> o componentă fizică care primește mesaje de la emițători și le rutează către receptori, decuplându-i.</p>
+<ul>
+<li>Emițătorul comunică doar cu brokerul, indicând un nume logic (<strong>topic</strong>); nu cunoaște receptorii.</li>
+<li>Responsabilități: primirea mesajelor · determinarea destinatarilor și rutarea · tratarea diferențelor dintre interfețe · transmiterea.</li>
+</ul>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Beneficii</th>
+<th>Constrângeri</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reduce cuplarea (grupare transparentă a receptorilor sub un nume logic)</td>
+<td>Crește complexitatea (multithreading, protocoale)</td>
+</tr>
+<tr>
+<td>Crește integrabilitatea (participanții nu au aceeași interfață)</td>
+<td>Crește efortul de mentenanță (înregistrare/identificare participanți)</td>
+</tr>
+<tr>
+<td>Crește evolutivitatea (brokerul izolează schimbările)</td>
+<td><strong>Single point of failure</strong> → rezolvat aici prin cluster primary/standby</td>
+</tr>
+<tr>
+<td></td>
+<td>Overhead (un pas suplimentar în comunicare)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="3-arhitectura-sistemului">3. Arhitectura sistemului</h2>
+<p><strong>Pe scurt:</strong> sender → broker → receiver; brokerul are straturi clare: rețea, protocol, rutare, stocare, workeri de livrare.</p>
+<pre class="mermaid">flowchart LR
+    S1[Sender Python] -- &quot;TCP · NDJSON&lt;br/&gt;PUBLISH&quot; --&gt; NET
+    S2[Sender Python] -- PUBLISH --&gt; NET
+    subgraph BROKER[Broker C# .NET 8]
+        NET[Strat rețea&lt;br/&gt;TcpServer + ClientSession&lt;br/&gt;un Task / conexiune]
+        PROTO[Protocol&lt;br/&gt;FrameCodec · FrameValidator]
+        ROUTER[Rutare&lt;br/&gt;TopicRegistry → Group]
+        STORE[Stocare&lt;br/&gt;MessageStore&lt;br/&gt;colecții thread-safe + WAL]
+        WORK[Workeri de livrare&lt;br/&gt;cron jobs, retry, DLQ]
+        NET --&gt; PROTO --&gt; ROUTER --&gt; STORE
+        STORE &lt;--&gt; WORK
+    end
+    WORK -- &quot;DELIVER&quot; --&gt; NET
+    NET -- &quot;DELIVER / ACK&quot; --&gt; R1[Receiver Python]
+    NET -- &quot;DELIVER / ACK&quot; --&gt; R2[Receiver Python]
+    STORE -.-&gt; WAL[(Jurnal WAL&lt;br/&gt;/data/broker.journal)]
+</pre>
+<p>Componentele din cod (<code>broker/src/Broker/</code>):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Strat</th>
+<th>Clase</th>
+<th>Rol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rețea</td>
+<td><code>TcpServer</code>, <code>ClientSession</code>, <code>HealthServer</code></td>
+<td>acceptă conexiuni, sesiune per client, health/metrics HTTP</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td><code>Frame</code>, <code>FrameCodec</code>, <code>FrameValidator</code>, <code>LineReader</code>, <code>ErrorCodes</code></td>
+<td>serializare NDJSON, validare, citire de linii cu limită</td>
+</tr>
+<tr>
+<td>Rutare</td>
+<td><code>TopicRegistry</code>, <code>Group</code>, <code>Delivery</code></td>
+<td>topic → grupuri de abonați, cozi per grup</td>
+</tr>
+<tr>
+<td>Stocare</td>
+<td><code>MessageStore</code>, <code>IJournal</code> (<code>NullJournal</code>, <code>FileJournal</code>)</td>
+<td>transient + persistent</td>
+</tr>
+<tr>
+<td>Livrare</td>
+<td><code>DeliveryWorker</code>, <code>RetryPolicy</code></td>
+<td>work joburi: livrare, timeout ACK, backoff, DLQ</td>
+</tr>
+<tr>
+<td>Cluster</td>
+<td><code>ClusterManager</code>, <code>ReplicatingJournal</code></td>
+<td>alegere lider, replicare WAL, failover</td>
+</tr>
+</tbody>
+</table></div>
+<p>Clienții (<code>clients/</code>): <code>common/client.py</code> (conectare, framing, reconectare cu backoff), <code>sender.py</code>, <code>receiver.py</code>.</p>
+<hr />
+<h2 id="4-alegeri-tehnologice-si-argumentare">4. Alegeri tehnologice și argumentare</h2>
+<p><strong>Pe scurt:</strong> TCP pentru fiabilitate, JSON pe linii pentru simplitate și interoperabilitate, C# pentru broker, Python pentru clienți.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Decizie</th>
+<th>Alegere</th>
+<th>Argumentare</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transport</td>
+<td><strong>TCP</strong></td>
+<td>livrare fiabilă și ordonată, fără pierderi sau alterări; UDP ar cere reimplementarea confirmărilor, retransmisiei și ordonării. Pentru un broker, pierderea unui mesaj în rețea este inacceptabilă.</td>
+</tr>
+<tr>
+<td>Format</td>
+<td><strong>JSON</strong></td>
+<td>citibil, suport nativ în ambele limbaje; sender-ul serializează, brokerul parsează doar „plicul” (action/topic/id), payload-ul rămâne opac. (Alternativa binară — protobuf — este tema Părții 2.)</td>
+</tr>
+<tr>
+<td>Delimitare cadre</td>
+<td><strong>NDJSON</strong> (un JSON pe linie)</td>
+<td>JSON escapează <code>\n</code>, deci delimitarea e sigură; trivial de implementat pe orice limbaj; depanabil cu <code>nc</code>/telnet. Limită de dimensiune contra abuzurilor.</td>
+</tr>
+<tr>
+<td>Canale</td>
+<td><strong>variabile, câte unul per topic</strong>, create la prima utilizare</td>
+<td>numărul de canale depinde de tipurile de mesaje; nu e nevoie de configurare prealabilă. Fiecare conexiune e <strong>unidirecțională</strong> (rol publisher sau subscriber).</td>
+</tr>
+<tr>
+<td>Structura comunicației</td>
+<td><strong>Publisher/Subscriber pe topic</strong>, cu grupuri</td>
+<td>un publisher → N grupuri (fan-out); în grup, membrii își împart mesajele. „Unul-la-unu” = un singur abonat.</td>
+</tr>
+<tr>
+<td>Limbaje</td>
+<td><strong>C# (broker)</strong> + <strong>Python (clienți)</strong></td>
+<td>brokerul e componenta critică: async/await, <code>Channel&lt;T&gt;</code>, colecții concurente, performanță. Clienții sunt simpli și rapid de scris în Python. Demonstrează că protocolul este independent de limbaj.</td>
+</tr>
+<tr>
+<td>Garanție de livrare</td>
+<td><strong>at-least-once</strong> + deduplicare după <code>id</code></td>
+<td>simplu și robust la căderi; receiverii sunt idempotenți.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="5-protocolul-de-lucru">5. Protocolul de lucru</h2>
+<p><strong>Pe scurt:</strong> sesiune <code>HELLO</code> → cadre JSON pe linie; <code>PUBLISH</code>/<code>SUBSCRIBE</code>/<code>ACK</code>; erori explicite fără a închide conexiunea. Specificația completă: <a href="protocol.html"><code>protocol.md</code></a>.</p>
+<pre class="mermaid">sequenceDiagram
+    participant S as Sender
+    participant B as Broker
+    participant R as Receiver
+    R-&gt;&gt;B: HELLO (subscriber)
+    B--&gt;&gt;R: WELCOME
+    R-&gt;&gt;B: SUBSCRIBE topic=orders group=workers
+    B--&gt;&gt;R: SUBSCRIBED
+    S-&gt;&gt;B: HELLO (publisher)
+    B--&gt;&gt;S: WELCOME
+    S-&gt;&gt;B: PUBLISH id=8f1c topic=orders payload={…}
+    Note over B: validare → deduplicare → jurnal WAL (fsync) → coadă grup
+    B--&gt;&gt;S: PUBLISHED id=8f1c
+    B-&gt;&gt;R: DELIVER id=8f1c attempt=1
+    R-&gt;&gt;B: ACK id=8f1c
+    Note over B: mesaj șters din coadă + înregistrare ACK în WAL
+</pre>
+<p>Exemplu de mesaj publicat (real):</p>
+<pre><code class="language-json">{&quot;action&quot;:&quot;PUBLISH&quot;,&quot;id&quot;:&quot;fab668ae308f4b66a53e043286faec0a&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;type&quot;:&quot;OrderCreated&quot;,
+ &quot;timestamp&quot;:&quot;2026-10-07T14:54:58+00:00&quot;,&quot;payload&quot;:{&quot;orderId&quot;:42,&quot;total&quot;:99.5}}
+</code></pre>
+<p><strong>Mesajul nu este alterat:</strong> <code>payload</code> este păstrat ca text JSON brut și retransmis identic (verificat de testele <code>test_publish_deliver_ack</code> și <code>Valid_publish_keeps_payload_untouched</code>, inclusiv diacritice, numere cu zecimale, <code>null</code>, structuri imbricate).</p>
+<hr />
+<h2 id="6-canale-si-rutare-publishersubscriber">6. Canale și rutare Publisher/Subscriber</h2>
+<p><strong>Pe scurt:</strong> topicul este identificatorul logic al canalului; grupurile decid cine primește ce.</p>
+<pre class="mermaid">flowchart LR
+    P[Publisher] --&gt;|topic = orders| T((orders))
+    T --&gt; GA[Grup &#x27;workers&#x27;]
+    T --&gt; GB[Grup &#x27;audit&#x27;]
+    GA --&gt; R1[receiver 1]
+    GA --&gt; R2[receiver 2]
+    GB --&gt; R3[receiver 3]
+</pre>
+<ul>
+<li>Grup diferit → <strong>fiecare primește o copie</strong> (fan-out: <code>audit</code> primește tot).</li>
+<li>Același grup → <strong>își împart mesajele</strong> (round-robin: <code>receiver 1</code> / <code>receiver 2</code>).</li>
+<li>Implicit <code>group = clientId</code> ⇒ fiecare receiver primește toate mesajele.</li>
+<li>Topic fără abonați → mesajele așteaptă într-un <strong>backlog</strong> și sunt atribuite primului grup care se abonează.</li>
+<li>Subiecte rezervate: <code>$dlq</code> (mesaje „moarte”) — poate fi citit de oricine, nu poate fi publicat de clienți.</li>
+<li>Verificat de: <code>test_fanout_between_groups_and_competition_within_group</code>, <code>test_backlog_delivered_to_first_subscriber</code>.</li>
+</ul>
+<hr />
+<h2 id="7-tratarea-concurenta">7. Tratarea concurentă</h2>
+<p><strong>Pe scurt:</strong> un Task asincron per conexiune (nu blochează I/O), workeri cron pentru livrare, colecții protejate pentru stocare.</p>
+<ul>
+<li><strong>Thread-per-request (variantă async):</strong> <code>TcpServer</code> acceptă într-o buclă asincronă și pornește un <code>Task</code> pentru fiecare <code>ClientSession</code>; citirea și scrierea unei sesiuni sunt independente (coadă de ieșire <code>Channel&lt;string&gt;</code> cu un singur scriitor). Canalul de I/O nu este blocat de procesarea unei cereri.</li>
+<li><strong>Work joburi (cron jobs):</strong> <code>Workers</code> (implicit 4) task-uri <code>DeliveryWorker</code>, fiecare cu <code>PeriodicTimer</code> (20 ms). Grupurile sunt <strong>partiționate</strong> pe workeri după hash-ul cheii → fără concurență pe același grup, deci fără blocări între workeri.</li>
+<li><strong>Colecții thread-safe:</strong> <code>ConcurrentDictionary</code> (registru, deduplicare), <code>Group</code> cu lock propriu peste <code>LinkedList</code> + <code>Dictionary</code> (coadă ordonată cu ștergere O(1)), <code>Channel&lt;T&gt;</code> (ieșire sesiuni, jurnal), contoare cu <code>Interlocked</code>.</li>
+<li><strong>Backpressure:</strong> coadă de ieșire limitată per client (un consumator prea lent este deconectat), <code>MaxGroupQueue</code> (publisherul primește <code>QUEUE_FULL</code>), fereastră de mesaje in-flight per grup.</li>
+<li>Verificat de: <code>test_concurrent_publishers_no_loss_no_duplicates</code> (8 publisheri × 100 mesaje simultan → toate 800 primite, fără pierderi).</li>
+</ul>
+<pre class="mermaid">flowchart TB
+    A[accept loop] --&gt;|Task per conexiune| C1[ClientSession 1]
+    A --&gt; C2[ClientSession 2]
+    A --&gt; C3[ClientSession N]
+    C1 &amp; C2 &amp; C3 --&gt;|PublishAsync| ST[(MessageStore&lt;br/&gt;Group queues)]
+    W0[Worker 0] &amp; W1[Worker 1] &amp; W2[Worker 2] &amp; W3[Worker 3] --&gt;|tick 20 ms&lt;br/&gt;grupuri partiționate| ST
+    W0 &amp; W1 &amp; W2 &amp; W3 --&gt;|DELIVER| OUT[canal de ieșire al sesiunii]
+</pre>
+<hr />
+<h2 id="8-stocarea-mesajelor-transient-si-persistent">8. Stocarea mesajelor: transient și persistent</h2>
+<p><strong>Pe scurt:</strong> același strat de stocare, două moduri: doar în memorie sau cu jurnal WAL pe disc (<code>BROKER__STORAGE=memory|file</code>).</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Transient (<code>memory</code>)</th>
+<th>Persistent (<code>file</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unde</td>
+<td>colecții concurente din memorie (<code>Group</code>)</td>
+<td>colecții + jurnal <code>broker.journal</code> (JSONL, append-only)</td>
+</tr>
+<tr>
+<td>Căderea brokerului</td>
+<td>mesajele se pierd</td>
+<td>mesajele neconfirmate se <strong>recuperează la repornire</strong></td>
+</tr>
+<tr>
+<td>Durabilitate</td>
+<td>–</td>
+<td><code>PUBLISHED</code> se trimite <strong>după fsync</strong></td>
+</tr>
+<tr>
+<td>Scriere</td>
+<td>–</td>
+<td>asincronă: un singur task scriitor, <strong>group commit</strong> (un fsync pentru un lot de înregistrări)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Detalii mod persistent:
+* Înregistrări WAL: <code>grp</code> (grup creat), <code>pub</code> (mesaj pentru un grup), <code>ack</code> (mesaj încheiat: confirmat, expirat sau în DLQ).
+* Ordinea: mai întâi înregistrarea durabilă, apoi mesajul devine vizibil workerilor ⇒ un <code>ack</code> nu poate precede <code>pub</code> în jurnal.
+* <strong>Recuperare + compactare la pornire:</strong> se reface starea (pub − ack), jurnalul se rescrie atomic (fișier temporar + <code>Move</code>), liniile corupte (ex. ultima scrisă parțial la cădere) sunt ignorate.
+* Verificat de: <code>test_unacked_messages_survive_broker_crash</code> (5 mesaje, <code>kill</code> brusc, repornire → toate 5 livrate; după ACK și altă repornire → nimic de livrat).</p>
+<hr />
+<h2 id="9-politici-de-livrare-si-tratarea-erorilor">9. Politici de livrare și tratarea erorilor</h2>
+<p><strong>Pe scurt:</strong> brokerul nu cade niciodată din cauza unui mesaj invalid; livrarea este at-least-once cu retry, backoff și Dead Letter Queue.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Caz</th>
+<th>Comportament</th>
+<th>Cod / mecanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JSON invalid / nu e obiect / tipuri greșite</td>
+<td><code>ERROR INVALID_JSON</code>, conexiunea rămâne deschisă</td>
+<td><code>FrameCodec.Decode</code></td>
+</tr>
+<tr>
+<td>câmp lipsă / invalid, acțiune necunoscută</td>
+<td><code>ERROR MISSING_FIELD</code> / <code>INVALID_FIELD</code> / <code>UNKNOWN_ACTION</code></td>
+<td><code>FrameValidator</code></td>
+</tr>
+<tr>
+<td>cadru prea mare</td>
+<td><code>ERROR FRAME_TOO_LARGE</code>, se sare peste linie</td>
+<td><code>LineReader</code></td>
+</tr>
+<tr>
+<td>primul cadru nu e <code>HELLO</code></td>
+<td><code>ERROR NOT_HELLO</code> + închidere</td>
+<td><code>ClientSession</code></td>
+</tr>
+<tr>
+<td>rol nepermis, topic rezervat</td>
+<td><code>FORBIDDEN_ROLE</code> / <code>FORBIDDEN_TOPIC</code></td>
+<td><code>ClientSession</code>, <code>FrameValidator</code></td>
+</tr>
+<tr>
+<td><code>PUBLISH</code> duplicat (același <code>id</code>)</td>
+<td>confirmat cu <code>duplicate:true</code>, nu se dublează</td>
+<td>deduplicare (fereastră 10 min)</td>
+</tr>
+<tr>
+<td>receiver nu trimite <code>ACK</code></td>
+<td>retrimitere cu <strong>backoff exponențial</strong> (0,5 s · 2ⁿ, max 30 s)</td>
+<td><code>Group.Collect</code></td>
+</tr>
+<tr>
+<td>după <code>MaxAttempts</code> (5)</td>
+<td>mutare în topicul <code>$dlq</code> cu motiv + payload original</td>
+<td><code>MessageStore.DeadLetterAsync</code></td>
+</tr>
+<tr>
+<td>receiver cade</td>
+<td>mesajele lui in-flight revin imediat în coadă → alți membri ai grupului</td>
+<td><code>Group.RemoveMember</code></td>
+</tr>
+<tr>
+<td><code>NACK</code> explicit</td>
+<td>contează ca încercare, reprogramare cu backoff</td>
+<td><code>ClientSession.OnNackAsync</code></td>
+</tr>
+<tr>
+<td>TTL depășit (<code>ttlMs</code>)</td>
+<td>mesajul se șterge, nu se livrează</td>
+<td><code>Group.Collect</code></td>
+</tr>
+<tr>
+<td>coadă plină</td>
+<td><code>ERROR QUEUE_FULL</code> către publisher</td>
+<td><code>MaxGroupQueue</code></td>
+</tr>
+<tr>
+<td>consumator prea lent</td>
+<td>conexiune închisă, mesajele revin în coadă</td>
+<td>coadă de ieșire limitată</td>
+</tr>
+<tr>
+<td>scriere eșuată în jurnal</td>
+<td><code>ERROR INTERNAL</code>, mesajul NU e confirmat (publisherul retrimite)</td>
+<td><code>PublishAsync</code></td>
+</tr>
+<tr>
+<td>cădere broker (<code>file</code>)</td>
+<td>recuperare din WAL</td>
+<td>secțiunea 8</td>
+</tr>
+<tr>
+<td>cădere broker (cluster)</td>
+<td>failover la standby</td>
+<td>secțiunea 11</td>
+</tr>
+<tr>
+<td>oprire (Ctrl+C / SIGTERM)</td>
+<td>oprire grațioasă: se închid sesiunile, se golește jurnalul</td>
+<td><code>Program.cs</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Exemplu real — receiver care nu confirmă niciodată (<code>AckTimeoutMs=500</code>, <code>MaxAttempts=3</code>):</p>
+<pre><code class="language-text"># receiver
+17:54:58 [orders] id=fab668ae… attempt=1 payload={&quot;orderId&quot;: 42, &quot;total&quot;: 99.5}
+17:54:59 [orders] id=fab668ae… attempt=2 payload={&quot;orderId&quot;: 42, &quot;total&quot;: 99.5}
+17:55:00 [orders] id=fab668ae… attempt=3 payload={&quot;orderId&quot;: 42, &quot;total&quot;: 99.5}
+# broker
+17:55:00 warn: Mesajul fab668ae… (orders/receiver-A) trimis în DLQ după 3 încercări
+# cititor $dlq
+17:55:00 [$dlq] payload={&quot;originalId&quot;:&quot;fab668ae…&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;group&quot;:&quot;receiver-A&quot;,&quot;attempts&quot;:3,
+                         &quot;reason&quot;:&quot;numărul maxim de încercări depășit&quot;,&quot;payload&quot;:{&quot;orderId&quot;:42,&quot;total&quot;:99.5}}
+</code></pre>
+<p>Exemplu real — mesaje invalide (brokerul rămâne activ):</p>
+<pre><code class="language-text">răspuns broker: {'action': 'ERROR', 'code': 'INVALID_JSON', 'reason': &quot;'n' is an invalid start of a property name…&quot;}
+17:54:59 warn: sender-e686ea#4: cadru respins [INVALID_JSON] 'n' is an invalid start of a property name…
+</code></pre>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Pending: PUBLISH (stocat)
+    Pending --&gt; InFlight: worker trimite DELIVER
+    InFlight --&gt; [*]: ACK
+    InFlight --&gt; Pending: timeout / NACK / receiver căzut&lt;br/&gt;(backoff exponențial)
+    InFlight --&gt; DLQ: încercări epuizate
+    Pending --&gt; [*]: TTL depășit
+    DLQ --&gt; [*]: citit din $dlq
+</pre>
+<hr />
+<h2 id="10-docker">10. Docker</h2>
+<p><strong>Pe scurt:</strong> două imagini (broker, clienți) + <code>docker-compose.yml</code> pentru un demo local într-o comandă.</p>
+<ul>
+<li><code>broker/Dockerfile</code> — build multi-stage (<code>dotnet/sdk:8.0</code> → <code>dotnet/runtime:8.0</code>), utilizator non-root, volum <code>/data</code> pentru jurnal, configurare prin variabile de mediu (<code>BROKER__STORAGE=file</code>, <code>BROKER__CLUSTER__…</code>), porturi 5000 (clienți), 5001 (replicare), 8080 (health).</li>
+<li><code>clients/Dockerfile</code> — <code>python:3.12-slim</code>, aceeași imagine pentru sender și receiver (se alege scriptul prin <code>command</code>).</li>
+<li><code>docker-compose.yml</code> — broker (mod <code>file</code>, volum persistent) + receiver + sender generator:</li>
+</ul>
+<pre><code class="language-powershell">docker compose up --build                 # pornește totul
+docker compose up --scale receiver=3      # 3 receiveri în același grup
+docker compose logs -f receiver
+</code></pre>
+<p>Endpoint-uri HTTP ale brokerului (port 8080): <code>/healthz</code> (liveness), <code>/ready</code> (readiness; <code>503</code> pe standby), <code>/role</code> (<code>leader</code>/<code>standby</code>), <code>/metrics</code> (JSON: conexiuni, publicate, livrate, retrimise, confirmate, DLQ, expirate, cadre invalide, duplicate).</p>
+<hr />
+<h2 id="11-kubernetes-si-clustering">11. Kubernetes și clustering</h2>
+<p><strong>Pe scurt:</strong> cluster <code>kind</code> (3 noduri, rulat în Docker pe un singur PC); brokerul rulează ca StatefulSet cu 2 replici în configurație primary/standby, cu replicare WAL și failover automat.</p>
+<h3 id="111-topologie">11.1 Topologie</h3>
+<pre class="mermaid">flowchart TB
+    subgraph KIND[kind cluster &#x27;padlabs&#x27; · 1 control-plane + 2 workeri]
+        subgraph STS[StatefulSet broker · 2 replici]
+            B0[broker-0&lt;br/&gt;LIDER&lt;br/&gt;ready]
+            B1[broker-1&lt;br/&gt;STANDBY&lt;br/&gt;not ready]
+            B0 -- &quot;replicare WAL&lt;br/&gt;TCP :5001 + heartbeat&quot; --&gt; B1
+            PV0[(PVC data-broker-0)] --- B0
+            PV1[(PVC data-broker-1)] --- B1
+        end
+        SVC[Service broker-client&lt;br/&gt;NodePort 30500&lt;br/&gt;doar pod-uri READY]
+        HL[Service broker · headless&lt;br/&gt;DNS stabil broker-0.broker …]
+        RD[Deployment receiver&lt;br/&gt;replicas: 2-3 · grup &#x27;workers&#x27;]
+        SD[Deployment sender&lt;br/&gt;generator mesaje]
+    end
+    SD --&gt; SVC
+    RD --&gt; SVC
+    SVC --&gt; B0
+    HOST[localhost:5000 pe gazdă] --&gt; SVC
+</pre>
+<p>Manifeste (<code>deploy/</code>): <code>kind-cluster.yaml</code> (3 noduri, port-mapping 30500 → localhost:5000), <code>k8s/namespace.yaml</code>, <code>broker-configmap.yaml</code>, <code>broker-service.yaml</code> (headless + NodePort), <code>broker-statefulset.yaml</code> (probe, PVC), <code>receiver-deployment.yaml</code>, <code>sender-deployment.yaml</code>, <code>demo.ps1</code>.</p>
+<p>Puncte cheie:
+* <strong>Readiness = „sunt liderul”</strong>: <code>GET /ready</code> → <code>200</code> doar pe lider; Service-ul <code>broker-client</code> trimite trafic numai către pod-ul ready ⇒ clienții ajung mereu la lider, fără proxy suplimentar.
+* <strong>Headless Service cu <code>publishNotReadyAddresses: true</code></strong>: nodul standby (not ready) rămâne rezolvabil DNS pentru replicare.
+* <code>podManagementPolicy: Parallel</code>: ambele noduri pornesc simultan (cu <code>OrderedReady</code>, standby-ul care nu devine niciodată „ready” ar bloca pornirea).
+* <strong>PVC per replică</strong> (<code>volumeClaimTemplates</code>) → jurnalul supraviețuiește repornirii pod-ului.
+* Clienții folosesc DNS <code>broker-client</code> și <strong>se reconectează automat</strong> (backoff exponențial cu jitter); publisherul retrimite cu același <code>id</code> (deduplicare).</p>
+<h3 id="112-mecanismul-de-clustering-primary-standby">11.2 Mecanismul de clustering (primary / standby)</h3>
+<ul>
+<li><strong>Replicare:</strong> fiecare înregistrare WAL scrisă de lider (<code>ReplicatingJournal</code>) este trimisă și standby-ului prin TCP (port 5001, același format NDJSON); la conectare standby-ul primește un <strong>snapshot</strong> al stării, apoi fluxul live. <strong>Heartbeat</strong> la 0,5 s.</li>
+<li><strong>Alegerea liderului</strong> (fără etcd/Raft, deterministă):
+  1. la pornire, un nod caută un lider existent; dacă îl găsește → devine <strong>standby</strong> și se resincronizează;
+  2. dacă nu există lider: nodul cu <strong>ordinalul cel mai mic</strong> (<code>broker-0</code>) se promovează imediat, celelalte după <code>FailoverMs</code> (3 s);
+  3. dacă liderul dispare (conexiune închisă sau fără heartbeat), standby-ul se promovează cu starea replicată;
+  4. un lider verifică periodic dacă există un alt lider; <strong>ordinalul mai mare cedează</strong> (închide sesiunile, revine standby și se resincronizează).</li>
+<li><strong>Standby:</strong> nu acceptă clienți (conexiunile sunt închise) și nu livrează mesaje.</li>
+<li>Testat automat: <code>ClusterTests</code> — două noduri, mesaje publicate la lider, <code>kill</code> lider → standby devine lider în câteva secunde și livrează toate cele 5 mesaje replicate; vechiul lider repornit devine standby (nu preemptează).</li>
+</ul>
+<h3 id="113-limitari-asumate-de-mentionat-la-prezentare">11.3 Limitări asumate (de menționat la prezentare)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Limitare</th>
+<th>Consecință</th>
+<th>Posibilă îmbunătățire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Replicare <strong>asincronă</strong></td>
+<td>la failover, ultimele mesaje confirmate publisherului dar încă nereplicate pot lipsi</td>
+<td>replicare sincronă (ACK de la standby înainte de <code>PUBLISHED</code>)</td>
+</tr>
+<tr>
+<td>Fără cvorum (2 noduri, nu Raft)</td>
+<td>la partiție de rețea pot exista temporar doi lideri; cel cu ordinal mai mare cedează la refacerea conectivității și își pierde modificările divergente</td>
+<td>3 noduri + consens Raft</td>
+</tr>
+<tr>
+<td>Compactarea jurnalului doar la pornire</td>
+<td>jurnalul crește cât timp brokerul rulează fără restart</td>
+<td>compactare periodică în task-ul scriitor</td>
+</tr>
+<tr>
+<td>At-least-once</td>
+<td>posibile livrări duplicate după failover</td>
+<td>receiveri idempotenți după <code>id</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="114-demonstratie-pe-un-singur-aparat">11.4 Demonstrație pe un singur aparat</h3>
+<p>Cerințe: Docker Desktop (WSL2), <code>kind</code>, <code>kubectl</code>.</p>
+<pre><code class="language-powershell">powershell -ExecutionPolicy Bypass -File deploy/k8s/demo.ps1            # up + scale + failover
+# sau pe pași:
+powershell -File deploy/k8s/demo.ps1 -Step up                            # build imagini, creează cluster, aplică manifeste
+kubectl -n padlabs get pods -o wide                                      # broker-0 = 1/1 Ready (lider), broker-1 = 0/1 (standby)
+kubectl -n padlabs scale deploy/receiver --replicas=3                    # mai mulți abonați în grup
+kubectl -n padlabs logs -f -l app=receiver --prefix                      # fiecare primește o parte din mesaje
+kubectl -n padlabs delete pod broker-0                                   # cădere lider
+kubectl -n padlabs get pods -w                                           # broker-1 devine Ready (lider); fluxul continuă
+powershell -File deploy/k8s/demo.ps1 -Step down                          # șterge clusterul
+</code></pre>
+<blockquote>
+<p><strong>Stare de verificare:</strong> logica de clustering este testată automat local (două procese broker). Fișierele Docker/Kubernetes sunt scrise, dar la momentul redactării <strong>nu au fost rulate pe această mașină</strong> (Docker Desktop cere instalare cu drepturi de administrator). Rezultatele rulării în <code>kind</code> se adaugă în secțiunea 12 după prima rulare.</p>
+</blockquote>
+<hr />
+<h2 id="12-ghid-de-rulare">12. Ghid de rulare</h2>
+<p><strong>Pe scurt:</strong> broker local în 2 comenzi, apoi sender/receiver în terminale separate.</p>
+<p>Cerințe: .NET 8 SDK, Python 3.10+ (doar biblioteca standard).</p>
+<pre><code class="language-powershell"># 1) Broker (transient, port 5000)
+cd broker
+dotnet run --project src/Broker
+#    persistent:   $env:BROKER__STORAGE=&quot;file&quot;; $env:BROKER__DATADIR=&quot;./data&quot;
+#    alt port:     dotnet run --project src/Broker -- --Broker:Port=5001
+
+# 2) Receiveri (terminale separate)
+cd clients
+python receiver.py --topic orders                         # primește tot
+python receiver.py --topic orders --group workers         # doi receiveri cu același grup își împart mesajele
+python receiver.py --topic orders --no-ack-rate 0.3       # simulează căderi (retry/DLQ)
+python receiver.py --topic '$dlq'                         # mesaje moarte
+
+# 3) Sender
+python sender.py --topic orders --payload '{&quot;orderId&quot;: 1, &quot;total&quot;: 25.5}' --type OrderCreated
+python sender.py --topic orders --count 1000 --threads 8  # generator
+python sender.py --topic orders --raw '{nu e json'        # test mesaj invalid → ERROR, brokerul rămâne activ
+</code></pre>
+<p>Configurare (variabile de mediu <code>BROKER__*</code> sau <code>appsettings.json</code>):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Setare</th>
+<th>Implicit</th>
+<th>Rol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Port</code> / <code>Host</code></td>
+<td>5000 / 0.0.0.0</td>
+<td>adresa socket-ului</td>
+</tr>
+<tr>
+<td><code>Storage</code> / <code>DataDir</code></td>
+<td>memory / ./data</td>
+<td>transient sau persistent</td>
+</tr>
+<tr>
+<td><code>Workers</code> / <code>WorkerIntervalMs</code></td>
+<td>4 / 20</td>
+<td>work joburi de livrare</td>
+</tr>
+<tr>
+<td><code>AckTimeoutMs</code> / <code>MaxAttempts</code></td>
+<td>5000 / 5</td>
+<td>politica de retry</td>
+</tr>
+<tr>
+<td><code>RetryBaseMs</code> / <code>RetryMaxMs</code></td>
+<td>500 / 30000</td>
+<td>backoff exponențial</td>
+</tr>
+<tr>
+<td><code>InFlightWindow</code></td>
+<td>1000</td>
+<td>mesaje neconfirmate simultan per grup</td>
+</tr>
+<tr>
+<td><code>MaxFrameBytes</code></td>
+<td>1 MB</td>
+<td>limită cadru</td>
+</tr>
+<tr>
+<td><code>MaxGroupQueue</code></td>
+<td>100000</td>
+<td>backpressure</td>
+</tr>
+<tr>
+<td><code>DefaultTtlMs</code></td>
+<td>0 (fără)</td>
+<td>TTL implicit</td>
+</tr>
+<tr>
+<td><code>Cluster__Enabled</code>, <code>Cluster__NodeId</code>, <code>Cluster__Peers</code>, <code>Cluster__ReplPort</code>, <code>Cluster__FailoverMs</code></td>
+<td>–</td>
+<td>clustering</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="13-testare-si-rezultate">13. Testare și rezultate</h2>
+<p><strong>Pe scurt:</strong> 21 teste unitare (xUnit) + 13 teste de integrare (pornesc brokerul real) — toate trec.</p>
+<pre><code class="language-powershell">cd broker;  dotnet test tests/Broker.Tests          # 21 teste unitare
+cd clients; python -m unittest discover -s tests -v  # 13 teste de integrare (broker real + clienți Python)
+</code></pre>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Scenariu</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>publish → deliver → ACK; payload neschimbat (diacritice, zecimale, null, imbricat); fără retrimitere după ACK</td>
+<td><code>test_publish_deliver_ack</code></td>
+</tr>
+<tr>
+<td>10 tipuri de cadre invalide → <code>ERROR</code> corect, brokerul și conexiunea rămân vii</td>
+<td><code>test_invalid_messages_do_not_crash_broker</code></td>
+</tr>
+<tr>
+<td>primul cadru ≠ HELLO</td>
+<td><code>test_first_frame_must_be_hello</code></td>
+</tr>
+<tr>
+<td>cadru &gt; limită, apoi conexiunea funcționează</td>
+<td><code>test_frame_too_large</code></td>
+</tr>
+<tr>
+<td>backlog atribuit primului abonat</td>
+<td><code>test_backlog_delivered_to_first_subscriber</code></td>
+</tr>
+<tr>
+<td>fan-out între grupuri + împărțire în grup</td>
+<td><code>test_fanout_between_groups_and_competition_within_group</code></td>
+</tr>
+<tr>
+<td>deduplicare după <code>id</code></td>
+<td><code>test_duplicate_publish_is_idempotent</code></td>
+</tr>
+<tr>
+<td>retry (încercările 1, 2, 3) apoi DLQ cu payload original</td>
+<td><code>test_retry_then_dead_letter</code></td>
+</tr>
+<tr>
+<td>cădere receiver → mesajele merg la alt membru</td>
+<td><code>test_receiver_crash_redelivers_to_other_member</code></td>
+</tr>
+<tr>
+<td>TTL</td>
+<td><code>test_ttl_expired_message_is_dropped</code></td>
+</tr>
+<tr>
+<td>8 publisheri concurenți × 100 mesaje, fără pierderi/duplicate</td>
+<td><code>test_concurrent_publishers_no_loss_no_duplicates</code></td>
+</tr>
+<tr>
+<td>persistență: <code>kill</code> broker → recuperare; după ACK nimic de livrat</td>
+<td><code>test_unacked_messages_survive_broker_crash</code></td>
+</tr>
+<tr>
+<td>cluster: replicare, failover, reintegrare ca standby</td>
+<td><code>test_failover_preserves_messages_and_old_leader_rejoins_as_standby</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Măsurători</strong> (aceeași mașină, 16 conexiuni sender simultane × 8000 mesaje, 1 receiver Python, ack pentru fiecare mesaj):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Mod</th>
+<th>Publicare (până la <code>PUBLISHED</code>)</th>
+<th>Livrate / confirmate</th>
+<th>Pierdute</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>memory</code></td>
+<td>≈ 6 400 msg/s</td>
+<td>8000 / 8000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>file</code> (fsync cu group commit)</td>
+<td>≈ 6 000 msg/s</td>
+<td>8000 / 8000</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Livrarea cap-coadă (≈ 1–2 mii msg/s) este limitată de receiverul Python single-thread, nu de broker. Mod <code>file</code> costă puțin datorită <em>group commit</em>-ului (un singur fsync pentru un lot de înregistrări).</p>
+<hr />
+<h2 id="14-limitari-si-legatura-cu-partea-2-rpc">14. Limitări și legătura cu Partea 2 (RPC)</h2>
+<ul>
+<li>Limitările clusterului — vezi 11.3. Garanția este <em>at-least-once</em> (nu <em>exactly-once</em>).</li>
+<li>Ordinea mesajelor este păstrată pentru prima livrare dintr-un grup, dar retrimiterile pot schimba ordinea.</li>
+<li>Autentificare/criptare TLS: nu sunt implementate (clientul se identifică doar prin <code>clientId</code>).</li>
+</ul>
+<p><strong>Partea 2:</strong> arhitectura rămâne identică; se înlocuiește nivelul de rețea (<code>Network/</code>, <code>Protocol/</code>) cu un RPC (gRPC/protobuf sau Thrift), păstrând straturile de rutare, stocare, workeri și cluster. Datele trec din JSON în <code>.proto</code> (tipizare, validare la nivel de schemă), iar <code>LineReader</code>/<code>FrameCodec</code> dispar în favoarea codului generat. Validarea datelor și procesarea concurentă rămân cerințe.</p>
+<hr />
+<h2 id="15-concluzii-si-referinte">15. Concluzii și referințe</h2>
+<ul>
+<li>Sistem complet Sender → Broker → Receiver peste TCP, cu protocol propriu, Pub/Sub pe topic și grupuri, stocare transient și persistent, politici de livrare (retry, backoff, DLQ, TTL, deduplicare) și tratarea erorilor fără căderea brokerului.</li>
+<li>Concurență: Task per conexiune, workeri cron partiționați, colecții thread-safe, backpressure.</li>
+<li>Operabilitate: Docker, Kubernetes (kind), health/readiness/metrics, cluster primary/standby cu failover automat.</li>
+<li>Interoperabilitate dovedită: broker C# ↔ clienți Python.</li>
+</ul>
+<p>Referințe (din enunț):
+1. About Message Brokers — https://www.ibm.com/cloud/learn/message-brokers
+2. Client/server pe socket-uri în Java — https://www.baeldung.com/a-guide-to-java-sockets
+3. Colecții thread-safe în C# — https://www.tutorialspoint.com/Thread-Safe-Concurrent-Collection-in-Chash
+4. JSON vs protobuf — https://auth0.com/blog/beating-json-performance-with-protobuf/
+5. gRPC — https://grpc.io/docs/what-is-grpc/introduction/ · Apache Thrift — https://thrift.apache.org/</p>
+</main>
+</div>
+<script type="module">
+const root=document.documentElement;
+function dark(){const t=root.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}
+document.getElementById('theme').onclick=()=>{try{root.dataset.theme=dark()?'light':'dark';localStorage.setItem('theme',root.dataset.theme)}catch(e){root.dataset.theme=dark()?'light':'dark'};location.reload()};
+try{const s=localStorage.getItem('theme');if(s)root.dataset.theme=s}catch(e){}
+document.querySelector('.menu').onclick=()=>document.body.classList.toggle('navopen');
+document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>document.body.classList.remove('navopen')));
+const links=[...document.querySelectorAll('nav a')],secs=links.map(a=>document.getElementById(a.getAttribute('href').slice(1)));
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const l=links[secs.indexOf(e.target)];if(l)l.classList.add('active')}})},{rootMargin:'0px 0px -75% 0px'});
+secs.forEach(s=>s&&io.observe(s));
+import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs').then(m=>{
+  m.default.initialize({startOnLoad:false,theme:dark()?'dark':'default',securityLevel:'loose'});
+  m.default.run({querySelector:'pre.mermaid'});
+}).catch(()=>{});
+</script>
+</body>
+</html>

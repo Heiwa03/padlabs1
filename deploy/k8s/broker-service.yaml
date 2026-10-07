@@ -1,0 +1,32 @@
+# Serviciu headless: nume DNS stabile pentru fiecare pod (broker-0.broker, broker-1.broker).
+# publishNotReadyAddresses: nodurile standby (not ready) trebuie să fie totuși rezolvabile pentru replicare.
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker
+  namespace: padlabs
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: broker
+  ports:
+    - { name: client, port: 5000 }
+    - { name: repl, port: 5001 }
+    - { name: health, port: 8080 }
+---
+# Punctul de intrare al clienților: trimite trafic DOAR către podul "ready" = liderul activ.
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker-client
+  namespace: padlabs
+spec:
+  type: NodePort
+  selector:
+    app: broker
+  ports:
+    - name: client
+      port: 5000
+      targetPort: 5000
+      nodePort: 30500

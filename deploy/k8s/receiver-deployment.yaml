@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: receiver
+  namespace: padlabs
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: receiver }
+  template:
+    metadata:
+      labels: { app: receiver }
+    spec:
+      containers:
+        - name: receiver
+          image: padlabs/clients:latest
+          imagePullPolicy: IfNotPresent
+          args: ["receiver.py", "--topic", "orders"]
+          env:
+            - { name: BROKER_HOST, value: broker-client }
+            - { name: BROKER_PORT, value: "5000" }
+            - { name: GROUP, value: workers }   # replicile își împart mesajele (competing consumers)
+            - name: CLIENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: broker
+  namespace: padlabs
+spec:
+  serviceName: broker
+  replicas: 2
+  podManagementPolicy: Parallel   # ambele noduri pornesc simultan (standby nu e "ready", deci OrderedReady ar bloca)
+  selector:
+    matchLabels:
+      app: broker
+  template:
+    metadata:
+      labels:
+        app: broker
+    spec:
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: broker
+          image: padlabs/broker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: client, containerPort: 5000 }
+            - { name: repl, containerPort: 5001 }
+            - { name: health, containerPort: 8080 }
+          envFrom:
+            - configMapRef:
+                name: broker-config
+          env:
+            - name: BROKER__CLUSTER__NODEID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          readinessProbe:            # true doar pe liderul activ
+            httpGet: { path: /ready, port: health }
+            periodSeconds: 1
+            failureThreshold: 1
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Mi

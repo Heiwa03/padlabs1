@@ -1,0 +1,12 @@
+# Cluster Kubernetes local pe o singură mașină: 1 control-plane + 2 workeri (noduri = containere Docker).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: padlabs
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30500   # NodePort-ul serviciului broker-client
+        hostPort: 5000         # -> localhost:5000 de pe mașina gazdă
+        protocol: TCP
+  - role: worker
+  - role: worker

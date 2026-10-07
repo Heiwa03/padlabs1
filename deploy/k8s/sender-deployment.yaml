@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sender
+  namespace: padlabs
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: sender }
+  template:
+    metadata:
+      labels: { app: sender }
+    spec:
+      containers:
+        - name: sender
+          image: padlabs/clients:latest
+          imagePullPolicy: IfNotPresent
+          args: ["sender.py", "--topic", "orders", "--type", "OrderCreated", "--forever", "--rate", "2"]
+          env:
+            - { name: BROKER_HOST, value: broker-client }
+            - { name: BROKER_PORT, value: "5000" }
+            - name: CLIENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }

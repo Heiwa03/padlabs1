@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-config
+  namespace: padlabs
+data:
+  BROKER__STORAGE: "file"
+  BROKER__WORKERS: "4"
+  BROKER__ACKTIMEOUTMS: "5000"
+  BROKER__MAXATTEMPTS: "5"
+  BROKER__CLUSTER__ENABLED: "true"
+  BROKER__CLUSTER__REPLPORT: "5001"
+  BROKER__CLUSTER__FAILOVERMS: "3000"
+  # toate nodurile clusterului (numele = numele pod-ului StatefulSet; ordinalul mai mic = lider preferat)
+  BROKER__CLUSTER__PEERS: "broker-0.broker.padlabs.svc.cluster.local:5001,broker-1.broker.padlabs.svc.cluster.local:5001"

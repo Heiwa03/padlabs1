@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Specificația protocolului</title>
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0b6bcb;--code:#f3f5f7;--card:#f8f9fb;--quote:#e8f1fb}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2b333d;--accent:#6cb2ff;--code:#1a2029;--card:#151b23;--quote:#14283d}}
+:root[data-theme=light]{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0b6bcb;--code:#f3f5f7;--card:#f8f9fb;--quote:#e8f1fb}
+:root[data-theme=dark]{--bg:#0f1318;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2b333d;--accent:#6cb2ff;--code:#1a2029;--card:#151b23;--quote:#14283d}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.layout{display:flex;max-width:1280px;margin:0 auto}
+nav{position:sticky;top:0;align-self:flex-start;height:100vh;overflow:auto;width:290px;flex:none;padding:24px 16px;border-right:1px solid var(--line);font-size:14px}
+nav h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+nav a{display:block;color:var(--fg);text-decoration:none;padding:5px 8px;border-radius:6px;line-height:1.35}
+nav a:hover{background:var(--card)}nav a.active{color:var(--accent);background:var(--card);font-weight:600}
+main{flex:1;min-width:0;padding:32px 40px 80px;max-width:920px}
+h1{font-size:2rem;line-height:1.25;margin:.2em 0 .4em}
+h2{font-size:1.5rem;margin:2.2em 0 .6em;padding-top:.8em;border-top:1px solid var(--line)}
+h3{font-size:1.15rem;margin:1.6em 0 .4em}
+a{color:var(--accent)}
+p,li{max-width:75ch}
+blockquote{margin:1em 0;padding:.6em 1em;background:var(--quote);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;color:var(--fg)}
+blockquote p{margin:.3em 0}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,SFMono-Regular,Consolas,monospace}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow:auto;border:1px solid var(--line);line-height:1.5}
+pre code{background:none;padding:0;font-size:.85em}
+.tablewrap{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}
+tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 55%,transparent)}
+hr{border:none;border-top:1px solid var(--line);margin:2em 0}
+pre.mermaid{background:var(--card);text-align:center;padding:18px 10px}
+pre.mermaid[data-processed]{white-space:normal}
+.theme{position:fixed;right:14px;top:12px;z-index:5;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+.menu{display:none}
+@media (max-width:900px){
+  nav{display:none;position:fixed;inset:0 auto 0 0;z-index:4;background:var(--bg);width:min(85vw,320px)}
+  body.navopen nav{display:block}
+  .menu{display:block;position:fixed;left:14px;top:12px;z-index:5;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px}
+  main{padding:56px 16px 60px}
+}
+@media print{nav,.theme,.menu{display:none}.layout{display:block}main{max-width:none;padding:0}h2{break-after:avoid}pre,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<button class="menu" aria-label="Cuprins">☰ Cuprins</button>
+<button class="theme" id="theme" aria-label="Schimbă tema">◐ Temă</button>
+<div class="layout">
+<nav><h2>Cuprins</h2><a href="#sesiune">Sesiune</a><a href="#cadre-client-broker">Cadre client → broker</a><a href="#cadre-broker-client">Cadre broker → client</a><a href="#exemple">Exemple</a><a href="#coduri-de-eroare">Coduri de eroare</a><a href="#semantica-rutarii">Semantica rutării</a><a href="#politici-de-livrare">Politici de livrare</a><a href="#protocol-intern-de-replicare-cluster">Protocol intern de replicare (cluster)</a></nav>
+<main>
+<h1 id="specificatia-protocolului">Specificația protocolului</h1>
+<p>Protocol de aplicație peste <strong>TCP</strong>. Un cadru = <strong>un obiect JSON pe o linie</strong>, terminat cu <code>\n</code> (NDJSON, UTF-8).
+Dimensiune maximă a unei linii: <code>MaxFrameBytes</code> (implicit 1 MB). Un cadru mai mare este respins cu <code>FRAME_TOO_LARGE</code>,
+iar conexiunea rămâne utilizabilă.</p>
+<p>Câmpul <code>payload</code> este <strong>opac</strong>: brokerul îl stochează ca text JSON brut și îl retransmite neschimbat.</p>
+<h2 id="sesiune">Sesiune</h2>
+<ol>
+<li>Clientul deschide conexiunea TCP și trimite imediat <code>HELLO</code> (altfel <code>NOT_HELLO</code> / <code>TIMEOUT</code> și conexiunea se închide).</li>
+<li>Un <code>role</code> per conexiune: <strong>publisher</strong> (poate doar <code>PUBLISH</code>) sau <strong>subscriber</strong> (poate <code>SUBSCRIBE</code>, <code>UNSUBSCRIBE</code>, <code>ACK</code>, <code>NACK</code>).
+   Canalele sunt astfel unidirecționale: publisher → broker → subscriber. Un client care are nevoie de ambele deschide două conexiuni.</li>
+<li><code>PING</code> → <code>PONG</code> menține conexiunea (conexiunile inactive mai mult de <code>IdleTimeoutMs</code> sunt închise).</li>
+</ol>
+<h2 id="cadre-client-broker">Cadre client → broker</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>action</th>
+<th>câmpuri</th>
+<th>observații</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HELLO</code></td>
+<td><code>clientId</code>, <code>role</code></td>
+<td><code>clientId</code>: <code>[A-Za-z0-9._-/]{1,128}</code></td>
+</tr>
+<tr>
+<td><code>PUBLISH</code></td>
+<td><code>id</code>, <code>topic</code>, <code>payload</code>, <code>type?</code>, <code>timestamp?</code>, <code>ttlMs?</code></td>
+<td><code>id</code> unic per topic (deduplicare); topicurile <code>$…</code> sunt rezervate</td>
+</tr>
+<tr>
+<td><code>SUBSCRIBE</code></td>
+<td><code>topic</code>, <code>group?</code></td>
+<td><code>group</code> implicit = <code>clientId</code></td>
+</tr>
+<tr>
+<td><code>UNSUBSCRIBE</code></td>
+<td><code>topic</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>ACK</code></td>
+<td><code>id</code>, <code>topic</code></td>
+<td>confirmă procesarea unui <code>DELIVER</code></td>
+</tr>
+<tr>
+<td><code>NACK</code></td>
+<td><code>id</code>, <code>topic</code></td>
+<td>refuz explicit → retry cu backoff</td>
+</tr>
+<tr>
+<td><code>PING</code></td>
+<td>–</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="cadre-broker-client">Cadre broker → client</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>action</th>
+<th>câmpuri</th>
+<th>când</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WELCOME</code></td>
+<td><code>clientId</code>, <code>role</code></td>
+<td>după <code>HELLO</code></td>
+</tr>
+<tr>
+<td><code>PUBLISHED</code></td>
+<td><code>id</code>, <code>topic</code>, <code>duplicate?</code></td>
+<td>mesajul este stocat (durabil în mod <code>file</code>)</td>
+</tr>
+<tr>
+<td><code>SUBSCRIBED</code> / <code>UNSUBSCRIBED</code></td>
+<td><code>topic</code>, <code>group?</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>DELIVER</code></td>
+<td><code>id</code>, <code>topic</code>, <code>group</code>, <code>type?</code>, <code>timestamp?</code>, <code>payload</code>, <code>attempt</code></td>
+<td>livrare (at-least-once)</td>
+</tr>
+<tr>
+<td><code>ERROR</code></td>
+<td><code>code</code>, <code>reason</code>, <code>id?</code></td>
+<td>cadru respins; conexiunea rămâne deschisă (except <code>NOT_HELLO</code>, <code>TIMEOUT</code>)</td>
+</tr>
+<tr>
+<td><code>PONG</code></td>
+<td>–</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="exemple">Exemple</h2>
+<pre><code class="language-json">{&quot;action&quot;:&quot;HELLO&quot;,&quot;clientId&quot;:&quot;sender-1&quot;,&quot;role&quot;:&quot;publisher&quot;}
+{&quot;action&quot;:&quot;WELCOME&quot;,&quot;clientId&quot;:&quot;sender-1&quot;,&quot;role&quot;:&quot;publisher&quot;}
+{&quot;action&quot;:&quot;PUBLISH&quot;,&quot;id&quot;:&quot;8f1c…&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;type&quot;:&quot;OrderCreated&quot;,&quot;timestamp&quot;:&quot;2026-10-07T14:54:58+00:00&quot;,&quot;payload&quot;:{&quot;orderId&quot;:42,&quot;total&quot;:99.5}}
+{&quot;action&quot;:&quot;PUBLISHED&quot;,&quot;id&quot;:&quot;8f1c…&quot;,&quot;topic&quot;:&quot;orders&quot;}
+</code></pre>
+<pre><code class="language-json">{&quot;action&quot;:&quot;HELLO&quot;,&quot;clientId&quot;:&quot;receiver-A&quot;,&quot;role&quot;:&quot;subscriber&quot;}
+{&quot;action&quot;:&quot;SUBSCRIBE&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;group&quot;:&quot;workers&quot;}
+{&quot;action&quot;:&quot;SUBSCRIBED&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;group&quot;:&quot;workers&quot;}
+{&quot;action&quot;:&quot;DELIVER&quot;,&quot;id&quot;:&quot;8f1c…&quot;,&quot;topic&quot;:&quot;orders&quot;,&quot;group&quot;:&quot;workers&quot;,&quot;type&quot;:&quot;OrderCreated&quot;,&quot;payload&quot;:{&quot;orderId&quot;:42,&quot;total&quot;:99.5},&quot;attempt&quot;:1}
+{&quot;action&quot;:&quot;ACK&quot;,&quot;id&quot;:&quot;8f1c…&quot;,&quot;topic&quot;:&quot;orders&quot;}
+</code></pre>
+<h2 id="coduri-de-eroare">Coduri de eroare</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>cod</th>
+<th>cauză</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INVALID_JSON</code></td>
+<td>linia nu este JSON valid, nu este obiect sau are tipuri greșite</td>
+</tr>
+<tr>
+<td><code>MISSING_FIELD</code> / <code>INVALID_FIELD</code></td>
+<td>câmp obligatoriu lipsă / valoare invalidă</td>
+</tr>
+<tr>
+<td><code>UNKNOWN_ACTION</code></td>
+<td>acțiune necunoscută</td>
+</tr>
+<tr>
+<td><code>FRAME_TOO_LARGE</code></td>
+<td>linie &gt; <code>MaxFrameBytes</code></td>
+</tr>
+<tr>
+<td><code>NOT_HELLO</code>, <code>DUPLICATE_HELLO</code></td>
+<td>ordinea sesiunii</td>
+</tr>
+<tr>
+<td><code>FORBIDDEN_ROLE</code></td>
+<td>acțiune nepermisă rolului (ex. <code>PUBLISH</code> de la un subscriber)</td>
+</tr>
+<tr>
+<td><code>FORBIDDEN_TOPIC</code></td>
+<td>publicare pe un topic rezervat (<code>$dlq</code>)</td>
+</tr>
+<tr>
+<td><code>NOT_SUBSCRIBED</code>, <code>ALREADY_SUBSCRIBED</code></td>
+<td>stare de abonare incompatibilă</td>
+</tr>
+<tr>
+<td><code>QUEUE_FULL</code></td>
+<td>coada unui grup a atins <code>MaxGroupQueue</code> (backpressure către publisher)</td>
+</tr>
+<tr>
+<td><code>TIMEOUT</code></td>
+<td><code>HELLO</code> nesosit la timp / conexiune inactivă</td>
+</tr>
+<tr>
+<td><code>INTERNAL</code></td>
+<td>eroare internă (de ex. scriere eșuată în jurnal); mesajul NU a fost stocat</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="semantica-rutarii">Semantica rutării</h2>
+<ul>
+<li><strong>Topic</strong> = identificatorul logic al canalului; publisherul nu cunoaște receiverii.</li>
+<li><strong>Grup</strong> (<code>group</code>): membrii aceluiași grup își împart mesajele (round-robin, <em>competing consumers</em>); grupuri diferite primesc
+  fiecare câte o copie (<em>fan-out</em>). Implicit fiecare receiver are grupul propriu (= primește tot). „Unul-la-unu” = un singur abonat.</li>
+<li>Un topic fără abonați păstrează mesajele într-un <strong>backlog</strong>; primul grup care se abonează le primește.</li>
+<li>Grupurile sunt durabile: mesajele rămân în coadă cât timp grupul nu are membri conectați (până la <code>ttlMs</code> sau <code>MaxGroupQueue</code>).</li>
+</ul>
+<h2 id="politici-de-livrare">Politici de livrare</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>situație</th>
+<th>comportament</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>fără <code>ACK</code> în <code>AckTimeoutMs</code></td>
+<td>retrimitere cu backoff exponențial (<code>RetryBaseMs</code>·2^(n-1), max <code>RetryMaxMs</code>)</td>
+</tr>
+<tr>
+<td>după <code>MaxAttempts</code> încercări</td>
+<td>mesajul se mută în topicul <code>$dlq</code> (se poate abona oricine)</td>
+</tr>
+<tr>
+<td>receiver cade</td>
+<td>mesajele lui in-flight revin imediat în coadă și merg la ceilalți membri ai grupului</td>
+</tr>
+<tr>
+<td><code>PUBLISH</code> repetat cu același <code>id</code></td>
+<td>confirmat idempotent (<code>duplicate:true</code>), nu se dublează</td>
+</tr>
+<tr>
+<td><code>ttlMs</code> depășit</td>
+<td>mesajul este șters, nu se livrează</td>
+</tr>
+<tr>
+<td>broker cade (<code>Storage=file</code>)</td>
+<td>la repornire mesajele neconfirmate se reîncarcă din jurnal</td>
+</tr>
+<tr>
+<td>broker cade (cluster)</td>
+<td>standby-ul devine lider cu starea replicată</td>
+</tr>
+</tbody>
+</table></div>
+<p>Garanție: <strong>at-least-once</strong> — un mesaj poate fi livrat de mai multe ori (după timeout/cădere), niciodată pierdut după <code>PUBLISHED</code>
+(în mod <code>file</code>, modulo ferestra de replicare asincronă la failover). Receiverii trebuie să fie idempotenți (după <code>id</code>).</p>
+<h2 id="protocol-intern-de-replicare-cluster">Protocol intern de replicare (cluster)</h2>
+<p>Pe un port separat (<code>ReplPort</code>, implicit 5001), același format NDJSON:
+<code>{"op":"who"}</code> / <code>{"op":"sync",…}</code> → <code>{"op":"role","role":"leader|standby",…}</code>; liderul trimite apoi
+<code>snap_begin</code>, înregistrările snapshot, <code>snap_end</code>, apoi fluxul de înregistrări WAL (<code>pub</code>/<code>ack</code>/<code>grp</code>) și <code>hb</code> (heartbeat).</p>
+</main>
+</div>
+<script type="module">
+const root=document.documentElement;
+function dark(){const t=root.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}
+document.getElementById('theme').onclick=()=>{try{root.dataset.theme=dark()?'light':'dark';localStorage.setItem('theme',root.dataset.theme)}catch(e){root.dataset.theme=dark()?'light':'dark'};location.reload()};
+try{const s=localStorage.getItem('theme');if(s)root.dataset.theme=s}catch(e){}
+document.querySelector('.menu').onclick=()=>document.body.classList.toggle('navopen');
+document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>document.body.classList.remove('navopen')));
+const links=[...document.querySelectorAll('nav a')],secs=links.map(a=>document.getElementById(a.getAttribute('href').slice(1)));
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const l=links[secs.indexOf(e.target)];if(l)l.classList.add('active')}})},{rootMargin:'0px 0px -75% 0px'});
+secs.forEach(s=>s&&io.observe(s));
+import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs').then(m=>{
+  m.default.initialize({startOnLoad:false,theme:dark()?'dark':'default',securityLevel:'loose'});
+  m.default.run({querySelector:'pre.mermaid'});
+}).catch(()=>{});
+</script>
+</body>
+</html>

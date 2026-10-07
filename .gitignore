@@ -1,0 +1,8 @@
+bin/
+obj/
+data/
+*.journal
+__pycache__/
+*.pyc
+.vs/
+.idea/
