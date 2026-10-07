@@ -6,3 +6,9 @@ __pycache__/
 *.pyc
 .vs/
 .idea/
+
+# Claude (asistent AI) - fișiere locale, nu fac parte din proiect
+CLAUDE.md
+CLAUDE.local.md
+HANDOFF.md
+.claude/
