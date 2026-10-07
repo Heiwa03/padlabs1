@@ -255,6 +255,7 @@ stateDiagram-v2
 
 * `broker/Dockerfile` — build multi-stage (`dotnet/sdk:8.0` → `dotnet/runtime:8.0`), utilizator non-root, volum `/data` pentru jurnal, configurare prin variabile de mediu (`BROKER__STORAGE=file`, `BROKER__CLUSTER__…`), porturi 5000 (clienți), 5001 (replicare), 8080 (health).
 * `clients/Dockerfile` — `python:3.12-slim`, aceeași imagine pentru sender și receiver (se alege scriptul prin `command`).
+* `.dockerignore` (în `broker/` și `clients/`) — exclude `bin/`, `obj/`, testele; altfel artefactele de build de pe Windows ar suprascrie restore-ul din container.
 * `docker-compose.yml` — broker (mod `file`, volum persistent) + receiver + sender generator:
 
 ```powershell
@@ -264,6 +265,15 @@ docker compose logs -f receiver
 ```
 
 Endpoint-uri HTTP ale brokerului (port 8080): `/healthz` (liveness), `/ready` (readiness; `503` pe standby), `/role` (`leader`/`standby`), `/metrics` (JSON: conexiuni, publicate, livrate, retrimise, confirmate, DLQ, expirate, cadre invalide, duplicate).
+
+**Rulare verificată** (Docker Desktop, engine 29.8.2):
+
+| Verificare | Rezultat |
+|---|---|
+| `docker compose up --build` | broker `healthy`, mesajele curg sender → broker → receiver |
+| `--scale receiver=3` | mesajele dintr-o fereastră de 8 s împărțite **6 / 5 / 5** între cei 3 receiveri ai grupului `workers` |
+| `/healthz`, `/role`, `/metrics` | `ok`, `leader`, `{"published":66,"delivered":66,"acked":66,"deadLettered":0,…}` |
+| receiveri opriți, `docker compose kill broker`, repornire | log: *„Recuperat din jurnal: 1 grupuri, 13 mesaje neconfirmate”*; după reconectarea receiverilor `delivered` = 42 față de `published` = 29 (cele 13 recuperate + cele noi) |
 
 ---
 
@@ -334,12 +344,38 @@ powershell -File deploy/k8s/demo.ps1 -Step up                            # build
 kubectl -n padlabs get pods -o wide                                      # broker-0 = 1/1 Ready (lider), broker-1 = 0/1 (standby)
 kubectl -n padlabs scale deploy/receiver --replicas=3                    # mai mulți abonați în grup
 kubectl -n padlabs logs -f -l app=receiver --prefix                      # fiecare primește o parte din mesaje
-kubectl -n padlabs delete pod broker-0                                   # cădere lider
-kubectl -n padlabs get pods -w                                           # broker-1 devine Ready (lider); fluxul continuă
+powershell -File deploy/k8s/demo.ps1 -Step failover                      # cădere lider + revenire (vezi mai jos)
 powershell -File deploy/k8s/demo.ps1 -Step down                          # șterge clusterul
 ```
 
-> **Stare de verificare:** logica de clustering este testată automat local (două procese broker). Fișierele Docker/Kubernetes sunt scrise, dar la momentul redactării **nu au fost rulate pe această mașină** (Docker Desktop cere instalare cu drepturi de administrator). Rezultatele rulării în `kind` se adaugă în secțiunea 12 după prima rulare.
+**De ce `cordon` la failover.** Un simplu `kubectl delete pod broker-0` NU produce failover: StatefulSet-ul recreează pod-ul în ≈ 1 s, sub pragul `FailoverMs` (3 s), iar `broker-0` își recuperează starea din propriul PVC și rămâne lider (*restart*, nu *failover* — și acesta a fost observat în rulare: 0 mesaje pierdute). De aceea pasul `failover` face întâi `kubectl cordon` pe nodul liderului: PVC-ul `standard` (local-path) este legat de acel nod, deci pod-ul recreat rămâne `Pending`, iar standby-ul preia conducerea. Apoi `kubectl uncordon` → vechiul lider pornește, găsește liderul nou și devine **standby**.
+
+### 11.5 Rezultatele rulării în `kind`
+
+Mediu: Windows 10, Docker Desktop (engine 29.8.2), `kind` 0.33.0, Kubernetes v1.37.0, 3 noduri.
+
+**Pornire (`-Step up`)** — `broker-0` și `broker-1` pe noduri diferite, câte un PVC fiecare:
+
+```
+NAME       READY   STATUS    NODE
+broker-0   1/1     Running   padlabs-worker2     /role -> leader
+broker-1   0/1     Running   padlabs-worker      /role -> standby
+```
+
+**Scalare (`-Step scale`, 3 receiveri)** — mesaje consecutive merg la pod-uri diferite (round-robin în grupul `workers`): `seq` 97 → `…2sbwb`, 98 → `…mj5bg`, 99 → `…fvnhx`, 100 → `…2sbwb` …
+
+**Failover (`-Step failover`)** — cronologie reală din loguri:
+
+| Ora | Eveniment |
+|---|---|
+| 23:01:10 | nodul `padlabs-worker2` cordoned, pod-ul lider `broker-0` șters; `broker-1`: *„legătura cu liderul broker-0 s-a pierdut”*; sender: *„publicare întreruptă → reconectare și retrimitere”* |
+| 23:01:13 | `broker-1`: *„rol Standby -> Leader”* (după `FailoverMs` = 3 s) |
+| 23:01:15–16 | sender-ul și cei 3 receiveri reconectați la `broker-1` prin Service-ul `broker-client` |
+| 23:01:21 | după `uncordon`: `broker-0` pornește, *„rol Starting -> Standby”*, *„urmăresc liderul broker-1”*, primește snapshot |
+
+Indisponibilitate pentru clienți: **≈ 5 s** (3 s detecție + reconectare cu backoff).
+
+**Integritate:** din logurile tuturor receiverilor, după două căderi ale brokerului (un restart și un failover): **247 mesaje primite, `seq` 0–246, 0 lipsă, 0 duplicate**. Mesajul aflat în zbor la momentul căderii a fost retrimis de sender cu același `id` și livrat o singură dată.
 
 ---
 

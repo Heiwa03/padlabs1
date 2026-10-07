@@ -447,6 +447,7 @@ iar exemplele (JSON, loguri, rezultate) provin din rulări reale ale sistemului.
 <ul>
 <li><code>broker/Dockerfile</code> — build multi-stage (<code>dotnet/sdk:8.0</code> → <code>dotnet/runtime:8.0</code>), utilizator non-root, volum <code>/data</code> pentru jurnal, configurare prin variabile de mediu (<code>BROKER__STORAGE=file</code>, <code>BROKER__CLUSTER__…</code>), porturi 5000 (clienți), 5001 (replicare), 8080 (health).</li>
 <li><code>clients/Dockerfile</code> — <code>python:3.12-slim</code>, aceeași imagine pentru sender și receiver (se alege scriptul prin <code>command</code>).</li>
+<li><code>.dockerignore</code> (în <code>broker/</code> și <code>clients/</code>) — exclude <code>bin/</code>, <code>obj/</code>, testele; altfel artefactele de build de pe Windows ar suprascrie restore-ul din container.</li>
 <li><code>docker-compose.yml</code> — broker (mod <code>file</code>, volum persistent) + receiver + sender generator:</li>
 </ul>
 <pre><code class="language-powershell">docker compose up --build                 # pornește totul
@@ -454,6 +455,33 @@ docker compose up --scale receiver=3      # 3 receiveri în același grup
 docker compose logs -f receiver
 </code></pre>
 <p>Endpoint-uri HTTP ale brokerului (port 8080): <code>/healthz</code> (liveness), <code>/ready</code> (readiness; <code>503</code> pe standby), <code>/role</code> (<code>leader</code>/<code>standby</code>), <code>/metrics</code> (JSON: conexiuni, publicate, livrate, retrimise, confirmate, DLQ, expirate, cadre invalide, duplicate).</p>
+<p><strong>Rulare verificată</strong> (Docker Desktop, engine 29.8.2):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Verificare</th>
+<th>Rezultat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>docker compose up --build</code></td>
+<td>broker <code>healthy</code>, mesajele curg sender → broker → receiver</td>
+</tr>
+<tr>
+<td><code>--scale receiver=3</code></td>
+<td>mesajele dintr-o fereastră de 8 s împărțite <strong>6 / 5 / 5</strong> între cei 3 receiveri ai grupului <code>workers</code></td>
+</tr>
+<tr>
+<td><code>/healthz</code>, <code>/role</code>, <code>/metrics</code></td>
+<td><code>ok</code>, <code>leader</code>, <code>{"published":66,"delivered":66,"acked":66,"deadLettered":0,…}</code></td>
+</tr>
+<tr>
+<td>receiveri opriți, <code>docker compose kill broker</code>, repornire</td>
+<td>log: <em>„Recuperat din jurnal: 1 grupuri, 13 mesaje neconfirmate”</em>; după reconectarea receiverilor <code>delivered</code> = 42 față de <code>published</code> = 29 (cele 13 recuperate + cele noi)</td>
+</tr>
+</tbody>
+</table></div>
 <hr />
 <h2 id="11-kubernetes-si-clustering">11. Kubernetes și clustering</h2>
 <p><strong>Pe scurt:</strong> cluster <code>kind</code> (3 noduri, rulat în Docker pe un singur PC); brokerul rulează ca StatefulSet cu 2 replici în configurație primary/standby, cu replicare WAL și failover automat.</p>
@@ -535,13 +563,47 @@ powershell -File deploy/k8s/demo.ps1 -Step up                            # build
 kubectl -n padlabs get pods -o wide                                      # broker-0 = 1/1 Ready (lider), broker-1 = 0/1 (standby)
 kubectl -n padlabs scale deploy/receiver --replicas=3                    # mai mulți abonați în grup
 kubectl -n padlabs logs -f -l app=receiver --prefix                      # fiecare primește o parte din mesaje
-kubectl -n padlabs delete pod broker-0                                   # cădere lider
-kubectl -n padlabs get pods -w                                           # broker-1 devine Ready (lider); fluxul continuă
+powershell -File deploy/k8s/demo.ps1 -Step failover                      # cădere lider + revenire (vezi mai jos)
 powershell -File deploy/k8s/demo.ps1 -Step down                          # șterge clusterul
 </code></pre>
-<blockquote>
-<p><strong>Stare de verificare:</strong> logica de clustering este testată automat local (două procese broker). Fișierele Docker/Kubernetes sunt scrise, dar la momentul redactării <strong>nu au fost rulate pe această mașină</strong> (Docker Desktop cere instalare cu drepturi de administrator). Rezultatele rulării în <code>kind</code> se adaugă în secțiunea 12 după prima rulare.</p>
-</blockquote>
+<p><strong>De ce <code>cordon</code> la failover.</strong> Un simplu <code>kubectl delete pod broker-0</code> NU produce failover: StatefulSet-ul recreează pod-ul în ≈ 1 s, sub pragul <code>FailoverMs</code> (3 s), iar <code>broker-0</code> își recuperează starea din propriul PVC și rămâne lider (<em>restart</em>, nu <em>failover</em> — și acesta a fost observat în rulare: 0 mesaje pierdute). De aceea pasul <code>failover</code> face întâi <code>kubectl cordon</code> pe nodul liderului: PVC-ul <code>standard</code> (local-path) este legat de acel nod, deci pod-ul recreat rămâne <code>Pending</code>, iar standby-ul preia conducerea. Apoi <code>kubectl uncordon</code> → vechiul lider pornește, găsește liderul nou și devine <strong>standby</strong>.</p>
+<h3 id="115-rezultatele-rularii-in-kind">11.5 Rezultatele rulării în <code>kind</code></h3>
+<p>Mediu: Windows 10, Docker Desktop (engine 29.8.2), <code>kind</code> 0.33.0, Kubernetes v1.37.0, 3 noduri.</p>
+<p><strong>Pornire (<code>-Step up</code>)</strong> — <code>broker-0</code> și <code>broker-1</code> pe noduri diferite, câte un PVC fiecare:</p>
+<pre><code>NAME       READY   STATUS    NODE
+broker-0   1/1     Running   padlabs-worker2     /role -&gt; leader
+broker-1   0/1     Running   padlabs-worker      /role -&gt; standby
+</code></pre>
+<p><strong>Scalare (<code>-Step scale</code>, 3 receiveri)</strong> — mesaje consecutive merg la pod-uri diferite (round-robin în grupul <code>workers</code>): <code>seq</code> 97 → <code>…2sbwb</code>, 98 → <code>…mj5bg</code>, 99 → <code>…fvnhx</code>, 100 → <code>…2sbwb</code> …</p>
+<p><strong>Failover (<code>-Step failover</code>)</strong> — cronologie reală din loguri:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Ora</th>
+<th>Eveniment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>23:01:10</td>
+<td>nodul <code>padlabs-worker2</code> cordoned, pod-ul lider <code>broker-0</code> șters; <code>broker-1</code>: <em>„legătura cu liderul broker-0 s-a pierdut”</em>; sender: <em>„publicare întreruptă → reconectare și retrimitere”</em></td>
+</tr>
+<tr>
+<td>23:01:13</td>
+<td><code>broker-1</code>: <em>„rol Standby -&gt; Leader”</em> (după <code>FailoverMs</code> = 3 s)</td>
+</tr>
+<tr>
+<td>23:01:15–16</td>
+<td>sender-ul și cei 3 receiveri reconectați la <code>broker-1</code> prin Service-ul <code>broker-client</code></td>
+</tr>
+<tr>
+<td>23:01:21</td>
+<td>după <code>uncordon</code>: <code>broker-0</code> pornește, <em>„rol Starting -&gt; Standby”</em>, <em>„urmăresc liderul broker-1”</em>, primește snapshot</td>
+</tr>
+</tbody>
+</table></div>
+<p>Indisponibilitate pentru clienți: <strong>≈ 5 s</strong> (3 s detecție + reconectare cu backoff).</p>
+<p><strong>Integritate:</strong> din logurile tuturor receiverilor, după două căderi ale brokerului (un restart și un failover): <strong>247 mesaje primite, <code>seq</code> 0–246, 0 lipsă, 0 duplicate</strong>. Mesajul aflat în zbor la momentul căderii a fost retrimis de sender cu același <code>id</code> și livrat o singură dată.</p>
 <hr />
 <h2 id="12-ghid-de-rulare">12. Ghid de rulare</h2>
 <p><strong>Pe scurt:</strong> broker local în 2 comenzi, apoi sender/receiver în terminale separate.</p>
